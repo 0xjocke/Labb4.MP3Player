@@ -27,78 +27,121 @@ import se.bachstatter.labb4mp3player.Service.MusicService;
 
 
 public class MainActivity extends ListActivity implements Chronometer.OnChronometerTickListener, SeekBar.OnSeekBarChangeListener{
+    /**
+     * Constants
+     */
     private static final int PLAY_BTN_POS = 1;
+    private static final int START_STATE = 0 ;
+    public static final int FIRST_TRACK = 0;
+    /**
+     * Class variables
+     */
     ArrayList<Track> trackList;
-    private boolean isPlaying = false;
     private int currentTrack = 0;
+
     private Menu menu;
-    // TODO  change name
+
     private SeekBar seekbar;
 
-    //Chronometer variables
     private Chronometer chronometer;
     private Boolean chronoIsCounting = false;
     private long timeWhenStopped = 0;
 
     MusicService mService;
-    boolean mBound = false;
+    boolean boundState = false;
 
     /** Defines callbacks for service binding, passed to bindService() */
     private ServiceConnection mConnection = new ServiceConnection() {
-
+        /**
+         * On Service connected set the mService variable to our service.
+         * Set boundState
+         * @param className
+         * @param service
+         */
         @Override
         public void onServiceConnected(ComponentName className,
                                        IBinder service) {
-            // We've bound to LocalService, cast the IBinder and get LocalService instance
+            // We've bound to MusicService, cast the IBinder and get MusicService instance
             MusicService.PlayerBinder binder = (MusicService.PlayerBinder) service;
             mService = binder.getService();
-            mBound = true;
+            boundState = true;
         }
 
+        /**
+         * onServiceDisconnected set boundState to false.
+         * @param arg0
+         */
         @Override
         public void onServiceDisconnected(ComponentName arg0) {
-            mBound = false;
+            boundState = false;
         }
     };
 
+    /**
+     *  setContentView to out layout.
+     * run initializeVarAndListeners
+     * run startAndBindIntent
+     * Create a new instance of trackListHelper
+     * if externalStorage is avaliable:
+     * getTrackList put it into our musicAdapter and setListAdatper to this class.
+     *
+     * @param savedInstanceState
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        seekbar = (SeekBar)findViewById(R.id.seekBar);
-        seekbar.setOnSeekBarChangeListener(this);
-        chronometer = (Chronometer) findViewById(R.id.chronometer);
-        chronometer.setOnChronometerTickListener(this);
+        initializeVarsAndListeners();
         startAndBindIntent();
         TrackListHelper trackListHelper = new TrackListHelper(getApplicationContext());
-        if(trackListHelper.isExternalStorageWritable()){
-            Log.d("MainActivity onCreate ", "Sd card available " );
+        if(trackListHelper.checkIfStorageAvailable()){
             trackList = trackListHelper.getPlaylist();
             MusicAdapter musicAdapter = new MusicAdapter(this, trackList);
             setListAdapter(musicAdapter);
         }
-
     }
 
+    /**
+     * Initialize seekbar, chronometer and set listeners
+     */
+    private void initializeVarsAndListeners(){
+        seekbar = (SeekBar)findViewById(R.id.seekBar);
+        seekbar.setOnSeekBarChangeListener(this);
+        chronometer = (Chronometer) findViewById(R.id.chronometer);
+        chronometer.setOnChronometerTickListener(this);
+    }
+
+    /**
+     * Create and intent
+     * Both start and bind it.
+     * We start it so it can live on its own.
+     * BIND_ABOVE_CLIENT means that the service has higher priority than the activity.
+     */
     private void startAndBindIntent(){
-           Intent intentService = new Intent(this, MusicService.class);
-           startService(intentService);
-           bindService(intentService, mConnection, BIND_ABOVE_CLIENT);
+        Intent intentService = new Intent(this, MusicService.class);
+        startService(intentService);
+        bindService(intentService, mConnection, BIND_ABOVE_CLIENT);
     }
 
+    /**
+     * OnStop unbind. The service will still be running cause we also run startService.
+     */
     @Override
     protected void onStop() {
         super.onStop();
         // Unbind from the service
-        if (mBound) {
-            mService.stopSelf();
+        if (boundState) {
             unbindService(mConnection);
-            mBound = false;
+            boundState = false;
         }
     }
 
-
-
+    /**
+     * Save the menu to classvariable
+     * Inflate the menu
+     * @param menu
+     * @return
+     */
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
@@ -107,6 +150,18 @@ public class MainActivity extends ListActivity implements Chronometer.OnChronome
         return true;
     }
 
+    /**
+     * onListItemClick set currentTrack to position.
+     * With the help of mService run musicPlayer method and send it chosen track.
+     * Change pause btn to play btn
+     * run stopChronometer() and runChronometer() to make sure it starts from zero.
+     * set isPlaying to true.
+     *
+     * @param listView
+     * @param view
+     * @param position
+     * @param id
+     */
     @Override
     protected void onListItemClick(ListView listView, View view, int position, long id) {
         currentTrack = position;
@@ -114,18 +169,19 @@ public class MainActivity extends ListActivity implements Chronometer.OnChronome
         menu.getItem(PLAY_BTN_POS).setIcon(R.drawable.ic_action_pause);
         stopChronometer();
         startChronometerAndSeekBar();
-
-        isPlaying = true;
     }
 
-
+    /**
+     * Check what btn is clicked and run associated function
+     * @param item
+     * @return
+     */
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-        switch (id){
+        switch (item.getItemId()){
             case R.id.playBtn:
                 playBtnAction(item);
                 break;
@@ -142,76 +198,126 @@ public class MainActivity extends ListActivity implements Chronometer.OnChronome
         return super.onOptionsItemSelected(item);
     }
 
-
+    /**
+     * StopBtnAction runs stop on mediaplayer.
+     * sets currentTrack in the service to null
+     * sets currentTrack in activity to No_TRACK.
+     * run stopChronometer()
+     * set seekbar to start state
+     * change playBtn to pause
+     *
+     */
     private void stopBtnAction(){
         mService.mediaPlayer.stop();
         mService.currentTrack = null;
+        currentTrack = TrackListHelper.NO_TRACK;
         stopChronometer();
-        seekbar.setProgress(0);
+        seekbar.setProgress(START_STATE);
         menu.getItem(PLAY_BTN_POS).setIcon(R.drawable.ic_action_play);
-        isPlaying = false;
-
     }
+
+    /**
+     * If musicplayer not isplaying return without doing anything.
+     * is currentTrack not is in start state set currentTrack to previous track
+     * run musicplayer with currentTrack, stopChronometer() and startChronometer()
+     */
     private void prevBtnAction(){
-        if(!isPlaying || currentTrack == 0)
+        if(!mService.mediaPlayer.isPlaying())
             return;
-        mService.musicPlayer(trackList.get(--currentTrack));
+        if(currentTrack != START_STATE){
+            --currentTrack;
+        }
+        mService.musicPlayer(trackList.get(currentTrack));
         stopChronometer();
         startChronometerAndSeekBar();
     }
     /**
      * NextBtnAction
-     * If music not playing retrun without doing anything.
+     *
+     * If music not playing return without doing anything.
+     * save lastTrack position by taking traklist.size()-1
+     * Is currentTrack is lastTrack set currentTrack START_STATE.
+     * else setCurrentTrack to next track
+     * run musicplayer with currentTrack, stopChronometer() and startChronometer()
      *
      */
     private void nextBtnAction() {
-        if(!isPlaying || currentTrack == trackList.size()-1)
+        if(!mService.mediaPlayer.isPlaying())
             return;
-        //TODO constat for -1
-        mService.musicPlayer(trackList.get(++currentTrack));
+        int lastTrackPosition = trackList.size()-1;
+        if(currentTrack == lastTrackPosition ){
+            currentTrack = START_STATE;
+        }else{
+            ++currentTrack;
+        }
+        mService.musicPlayer(trackList.get(currentTrack));
         stopChronometer();
         startChronometerAndSeekBar();
     }
 
+    /**
+     * IF mediaplayer is playing pause it, pause chornomter and set icon to pause.
+     *
+     * else
+     * if musicService currentTrack is null, play firstTrack, startChornometerAndSeekBar
+     * set playbtn to pause and put mainactivitys classVariable currentTrack to start state.
+     *
+     * else continue where we paused by calling play on mediaplayer.
+     * start chronometer and seekbar and set icon to pause.
+     * @param item
+     */
     private void playBtnAction(MenuItem item){
-        if (isPlaying) {
+        if (mService.mediaPlayer.isPlaying()) {
             mService.mediaPlayer.pause();
             pauseChromometer();
             item.setIcon(R.drawable.ic_action_play);
-            isPlaying = false;
         } else {
             if(mService.currentTrack == null){
-                mService.musicPlayer(trackList.get(0));
+                mService.musicPlayer(trackList.get(FIRST_TRACK));
                 startChronometerAndSeekBar();
                 item.setIcon(R.drawable.ic_action_pause);
-                isPlaying = true;
+                currentTrack = START_STATE;
             }else{
                 mService.mediaPlayer.start();
                 startChronometerAndSeekBar();
                 item.setIcon(R.drawable.ic_action_pause);
-                isPlaying = true;
             }
 
         }
     }
 
+    /**
+     * Setbase for chronometer to  elapsed milliseconds since boot + timeWhenstop (which will be zero at first)
+     * set chronoIsCounting to true.
+     * set seekbar max to the duration of the track playing. Divide it by 1000 to convert from milisec to sec.
+     * and start chronometer.
+     *
+     */
     private void startChronometerAndSeekBar(){
         chronometer.setBase(SystemClock.elapsedRealtime() + timeWhenStopped);
         chronoIsCounting = true;
         seekbar.setMax(mService.mediaPlayer.getDuration()/1000);
         chronometer.start();
     }
+
+    /**
+     * set TimeWhenStopped to start state.
+     * set chornoiscounting to false.
+     * stop chronometer and set its base to elapsed milliseconds since boot.
+     */
     private void stopChronometer(){
-        //reset the timewhenstop variable
-        // set mChronometer is counting to false
-        //stop the mChronometer
-        // and reset the time
-        timeWhenStopped = 0;
+        timeWhenStopped = START_STATE;
         chronoIsCounting = false;
         chronometer.stop();
         chronometer.setBase(SystemClock.elapsedRealtime());
     }
 
+    /**
+     * if chronometer is counting
+     * set timewhenstoppen to chronomters base minus elapsed milliseconds since boot
+     * stop chornometer
+     * and set chornoiscounting to false.
+     */
     private void pauseChromometer(){
         if (chronoIsCounting){
             timeWhenStopped = chronometer.getBase() - SystemClock.elapsedRealtime();
@@ -220,14 +326,21 @@ public class MainActivity extends ListActivity implements Chronometer.OnChronome
         }
     }
 
+    /**
+     *   Take chronomters base minus elapsed milliseconds since boot and divide it by 1000.
+     *   When its bigger than 0 one sec will have passed. (when casting to int 0.9 == 0)
+     *   on every tick that is bigger than 0
+     *
+     * @param chronometer
+     */
     @Override
     public void onChronometerTick(Chronometer chronometer) {
         int elapsedSeconds = (int) (SystemClock.elapsedRealtime() - chronometer.getBase())/1000;
-        if (elapsedSeconds >= 1){
+        if (elapsedSeconds > START_STATE){
             seekbar.setProgress(elapsedSeconds);
             if(elapsedSeconds >= mService.mediaPlayer.getDuration()/1000){
                 stopChronometer();
-                seekbar.setProgress(0);
+                seekbar.setProgress(START_STATE);
                 startChronometerAndSeekBar();
             }
         }
@@ -243,9 +356,18 @@ public class MainActivity extends ListActivity implements Chronometer.OnChronome
 
     }
 
+    /**
+     * When user changes seekbar and let it go:
+     * if mediaplayer is playing:
+     * stopChronometer(), set timeWhenStop to minus seekbars progress *1000 (we want it in milisec)
+     * startChronometer()
+     * use mediaplayers seekTo() and send it seekbars progress *1000
+     *
+     * @param seekBar
+     */
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {
-        if (isPlaying){
+        if (mService.mediaPlayer.isPlaying()){
             stopChronometer();
             timeWhenStopped = -seekbar.getProgress()*1000;
             startChronometerAndSeekBar();

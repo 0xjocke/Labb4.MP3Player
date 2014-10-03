@@ -28,6 +28,26 @@ public class MusicAdapter extends ArrayAdapter<Track> {
         this.context = context;
         this.trackArrayList = trackArrayList;
     }
+    /**
+     * getView get called for every row
+     * Initialize inner Class ViewHolder
+     * if converView is null we need to create a new view.
+     * The LayoutInflater takes the chosen layout XML-file and creates View-objects from its contents.
+     * Then I make a new instance on ViewHolder and saves my text- and imagesviews in class variables
+     * and finally sets a tag on the viewHolder.
+     *
+     * else if convertView not is null we dont have to create a new.
+     * we get our viewHolder by calling getTag on convertView (and casting it)
+     *
+     * Now we can get our track for this specific row and by calling get on trackList with our position.
+     * We get our  trackname by getFileName() and puts it to our TextView which we access with help from ViewHolder.
+     * And  does the same thing for artist and the album art.
+     *
+     * @param position
+     * @param convertView
+     * @param parent
+     * @return
+     */
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         ViewHolder viewHolder;
@@ -55,6 +75,9 @@ public class MusicAdapter extends ArrayAdapter<Track> {
         return convertView;
     }
 
+    /**
+     * ViewHolder is used to store Text- and imageView
+     */
     public static class ViewHolder{
         public TextView nameHolder;
         public TextView artistHolder;

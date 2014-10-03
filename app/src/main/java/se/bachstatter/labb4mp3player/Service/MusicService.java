@@ -4,58 +4,88 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
-import android.database.Cursor;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Environment;
 import android.os.IBinder;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.Random;
-
 import se.bachstatter.labb4mp3player.Activity.MainActivity;
 import se.bachstatter.labb4mp3player.Models.Track;
-import se.bachstatter.labb4mp3player.Models.TrackListHelper;
 import se.bachstatter.labb4mp3player.R;
 
 
 public class MusicService extends Service{
+    /**
+     * Constants.
+     */
+    private static final String ERROR_MESSAGE = "Cant play this song";
+    private static final String DASH_DIVIDER = " - " ;
+    /**
+     * Class variable
+      */
     public MediaPlayer mediaPlayer;
     public Track currentTrack = null;
-    private ArrayList<Track> trackList;
-    private boolean isStarted = false;
+    /**
+     * Class variable for insansiate inner class
+     */
     private final IBinder mBinder = new PlayerBinder();
 
-
+    /**
+     * Class used for the client Binder.
+     */
     public class PlayerBinder extends Binder {
          public MusicService getService() {
-            // Return this instance of LocalService so clients can call public methods
+            // Return this instance of MusicService so clients can call public methods
             return MusicService.this;
         }
     }
 
+    /**
+     * OnCreate instatiate a new MediaPlayer
+     */
     @Override
     public void onCreate() {
         mediaPlayer = new MediaPlayer();
         super.onCreate();
-        Log.d("MusicService", "Creating service...");
     }
+
+    /**
+     * On bind return out mBinder with PLayerBinder class
+     * @param intent
+     * @return
+     */
     @Override
     public IBinder onBind(Intent intent) {
         return mBinder;
     }
 
+    /**
+     * Returning start sticky will make it possible to stop the service.
+     * @param intent
+     * @param flags
+     * @param startId
+     * @return
+     */
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d("MusicService", "Service started...");
         return START_STICKY;
     }
 
+    /**
+     *
+     * Create The intent to launch when the user clicks the expanded notification
+     * On click the MainActivity will be runned.
+     *
+     * Set flags so the user cant "throw" away the notifaication and so it dont disaper when user
+     * clicks on clear.
+     * Finally start it as a Foreground notification.
+     *
+     * @param currentTrack
+     */
     private void onGoingNotification(Track currentTrack) {
         final int myID = 1234;
 
@@ -65,57 +95,65 @@ public class MusicService extends Service{
         PendingIntent pendIntent = PendingIntent.getActivity(this, 0, intent, 0);
 
         //This constructor is deprecated. Use Notification.Builder instead
-        Notification notice = new Notification(R.drawable.ic_launcher, currentTrack.getFileName().split(".mp3")[0] + " - " + currentTrack.getArtist(), 3);
+        Notification notice = new Notification(R.drawable.ic_launcher, currentTrack.getFileName() + DASH_DIVIDER + currentTrack.getArtist(), 3);
         //This method is deprecated. Use Notification.Builder instead.
         notice.setLatestEventInfo(this, currentTrack.getFileName(), currentTrack.getArtist(), pendIntent);
 
         notice.flags |= Notification.FLAG_NO_CLEAR;
 
         startForeground(myID, notice);
-
-        isStarted = true;
     }
 
+    /**
+     * Our music player method will create a mediaplayer.
+     * if track i null return.
+     * Always show a notification with the playing song.
+     * If media player isPLaying stop.
+     * Reset the player, set data source to our path,
+     * setAudioStreamType to music, prepare the player.
+     * Set and onCompletionListener to play the next song on completion.
+     * Start the player.
+     * Set currentTrack to the track playing
+     *
+     * On error catch it and send error message to user with toast and to logcat.
+     * @param track the track we want to play.
+     */
     public void musicPlayer(Track track){
         if (track == null)
             return;
         onGoingNotification(track);
-
-
         try {
             if (mediaPlayer.isPlaying())
-                mediaPlayer.stop(); // Stop current song.
-
-            mediaPlayer.reset(); // reset resource of player
-            mediaPlayer.setDataSource(this, Uri.parse(track.getPath())); // set Song to play
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_NOTIFICATION); // select audio stream
-            mediaPlayer.prepare(); // prepare resource
-            // on completion handler
+                mediaPlayer.stop();
+            mediaPlayer.reset();
+            mediaPlayer.setDataSource(this, Uri.parse(track.getPath()));
+            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+            mediaPlayer.prepare();
             mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){
-                // onDone
                 @Override
                 public void onCompletion(MediaPlayer mp) {
                     musicPlayer(currentTrack.getNextTrack());
                 }
             });
-            mediaPlayer.start(); // play!
-            isStarted = true;
+            mediaPlayer.start();
             currentTrack = track;
         } catch (Exception e) {
-            Toast.makeText(this, "Error!", Toast.LENGTH_SHORT).show();
-            Log.d("MusicService error", e.toString());
+            Toast.makeText(this, ERROR_MESSAGE, Toast.LENGTH_SHORT).show();
+            Log.d(this.toString(), e.toString());
         }
     }
 
 
-
-
+    /**
+     * On destroy is mediaplayer is playing
+     * set currentTrack to null
+     * stop the player.
+     * And finally release resources associated with this MediaPlayer object.
+     */
     @Override
     public void onDestroy() {
         super.onDestroy();
-        Log.d(MusicService.class.toString(), "Död!");
         if(mediaPlayer.isPlaying()){
-            isStarted = false;
             currentTrack = null;
             mediaPlayer.stop();
             mediaPlayer.release();

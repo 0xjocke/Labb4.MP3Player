@@ -1,6 +1,5 @@
 package se.bachstatter.labb4mp3player.Models;
 
-import android.graphics.Bitmap;
 import android.graphics.drawable.Drawable;
 
 /**
@@ -11,25 +10,25 @@ public class Track {
     private String fileName;
     private String album;
     private String path;
-    private int duration;
     private Drawable albumArt;
     private Track nextTrack = null;
 
-
-    public Track(String artist, String fileName, String album, String path, String duration){
+    /**
+     * Constructor that sets all the arguments it get to calss variables.
+     * @param artist
+     * @param fileName
+     * @param album
+     * @param path
+     */
+    public Track(String artist, String fileName, String album, String path){
         this.artist = artist;
         this.fileName = fileName;
         this.album = album;
         this.path = path;
-        this.duration = Integer.parseInt(duration);
     }
 
     public String getAlbum() {
         return album;
-    }
-
-    public int getDuration() {
-        return duration;
     }
 
     public String getPath() {
